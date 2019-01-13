@@ -23,8 +23,8 @@ dependencies {
 
     compile("commons-io:commons-io:2.5")
 
-    // HTTP client for unit tests
-    testCompile("org.apache.httpcomponents:fluent-hc:4.5.3")
+
+    testCompile("com.google.guava:guava:23.1-jre")
 }
 
 tasks {

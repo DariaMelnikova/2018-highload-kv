@@ -20,6 +20,8 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 
+import ru.mail.polis.dariam.MyService;
+
 /**
  * Constructs {@link KVService} instances.
  *
@@ -51,7 +53,6 @@ final class KVServiceFactory {
             throw new IllegalArgumentException("Port out of range");
         }
 
-        // TODO: Implement me
-        throw new UnsupportedOperationException("Implement me!");
+        return new MyService(port, dao);
     }
 }

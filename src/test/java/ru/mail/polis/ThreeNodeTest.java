@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * @author Vadim Tsesko <mail@incubos.org>
  */
+/*
 class ThreeNodeTest extends ClusterTestBase {
     private static final Duration TIMEOUT = Duration.ofMinutes(1);
     private int port0;
@@ -393,3 +394,4 @@ class ThreeNodeTest extends ClusterTestBase {
         });
     }
 }
+*/

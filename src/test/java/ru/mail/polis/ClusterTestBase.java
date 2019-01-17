@@ -32,7 +32,6 @@ import java.util.concurrent.TimeUnit;
  *
  * @author Vadim Tsesko <incubos@yandex.com>
  */
-/*
 abstract class ClusterTestBase extends TestBase {
     private static final long TIMEOUT = TimeUnit.SECONDS.toMillis(1);
     private final Map<String, HttpClient> hostToClient = new HashMap<>();
@@ -112,4 +111,3 @@ abstract class ClusterTestBase extends TestBase {
         return client(node).put(path(key, ack, from), data);
     }
 }
-*/

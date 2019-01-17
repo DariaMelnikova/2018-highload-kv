@@ -23,7 +23,11 @@ dependencies {
 
     compile("commons-io:commons-io:2.5")
 
+    compile("org.apache.commons:commons-collections4:4.0")
 
+    compile("org.apache.httpcomponents:fluent-hc:4.5.3")
+
+    // Guava for tests
     testCompile("com.google.guava:guava:23.1-jre")
 }
 

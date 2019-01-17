@@ -3,10 +3,9 @@ package ru.mail.polis.dariam;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.concurrent.Executors;
 
-import org.apache.commons.io.IOUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -14,6 +13,14 @@ import com.sun.net.httpserver.HttpServer;
 
 import ru.mail.polis.KVDao;
 import ru.mail.polis.KVService;
+import ru.mail.polis.dariam.httpclient.HttpQueryCreator;
+import ru.mail.polis.dariam.controller.DeleteController;
+import ru.mail.polis.dariam.controller.GetController;
+import ru.mail.polis.dariam.controller.PutController;
+import ru.mail.polis.dariam.controller.ServiceController;
+import ru.mail.polis.dariam.controller.ThreadPoolReplicasQuerys;
+import ru.mail.polis.dariam.replicahelpers.ReplicasCollection;
+import ru.mail.polis.dariam.replicahelpers.ReplicaParametersException;
 
 public class MyService implements KVService {
     public final static String CONTEXT_ENTITY = "/v0/entity";
@@ -23,16 +30,52 @@ public class MyService implements KVService {
     private HttpServer httpServer;
 
     @NotNull
+    private final ReplicasCollection replicasHosts;
+
+    @NotNull
+    private final ThreadPoolReplicasQuerys threadPool;
+
+    @NotNull
+    private final HttpQueryCreator httpQueryCreator;
+
+    @NotNull
+    private final String myReplicaHost;
+
+    @NotNull
     private final KVDao dao;
 
     private final int port;
 
-    public MyService(int port, @NotNull KVDao dao) throws IOException {
+    public MyService(int port, @NotNull KVDao dao, Set<String> replicas) throws IOException {
         this.port = port;
+
         this.dao = dao;
+
+        this.myReplicaHost = "http://localhost:" + port;
+
+        this.replicasHosts = new ReplicasCollection(replicas);
+        this.replicasHosts.remove(this.myReplicaHost);
+
+        this.httpQueryCreator = new HttpQueryCreator();
+
+        this.threadPool = new ThreadPoolReplicasQuerys();
     }
 
     private void createRouters(){
+        StorageContext storageContext = new StorageContext(
+                dao,
+                httpQueryCreator,
+                replicasHosts,
+                myReplicaHost,
+                threadPool
+        );
+
+        ServiceController serviceController = new ServiceController(storageContext);
+
+        DeleteController deleteProcessor = new DeleteController(storageContext);
+        GetController getProcessor = new GetController(storageContext);
+        PutController putProcessor = new PutController(storageContext);
+
         try {
 
             this.httpServer.createContext(CONTEXT_STATUS, httpExchange -> {
@@ -42,38 +85,17 @@ public class MyService implements KVService {
 
             this.httpServer.createContext(CONTEXT_ENTITY, httpExchange -> {
                 try {
-                    byte[] id = getId(httpExchange.getRequestURI().getQuery());
-
                     switch (httpExchange.getRequestMethod()) {
                         case "GET":
-                            try {
-                                byte[] value = dao.get(id);
-                                httpExchange.sendResponseHeaders(HttpHelpers.STATUS_SUCCESS_GET, value.length);
-                                IOUtils.write(value, httpExchange.getResponseBody());
-                            } catch (NoSuchElementException e) {
-                                httpExchange.sendResponseHeaders(HttpHelpers.STATUS_NOT_FOUND, 0);
-                            } finally {
-                                httpExchange.getResponseBody().close();
-                                httpExchange.close();
-                            }
+                            serviceController.execute(httpExchange, getProcessor);
                             break;
 
                         case "PUT":
-                            try {
-                                dao.upsert(id, IOUtils.toByteArray(httpExchange.getRequestBody()));
-                                httpExchange.sendResponseHeaders(HttpHelpers.STATUS_SUCCESS_PUT, 0);
-                            } finally {
-                                httpExchange.close();
-                            }
+                            serviceController.execute(httpExchange, putProcessor);
                             break;
 
                         case "DELETE":
-                            try {
-                                dao.remove(id);
-                            } finally {
-                                httpExchange.sendResponseHeaders(HttpHelpers.STATUS_SUCCESS_DELETE, 0);
-                                httpExchange.close();
-                            }
+                            serviceController.execute(httpExchange, deleteProcessor);
                             break;
 
                         default:
@@ -81,10 +103,12 @@ public class MyService implements KVService {
                             httpExchange.getResponseBody().close();
                             httpExchange.close();
                     }
-                } catch (IllegalIdException e){
+                } catch (IllegalIdException | ReplicaParametersException e){
+                    e.printStackTrace();
                     httpExchange.sendResponseHeaders(HttpHelpers.STATUS_BAD_ARGUMENT, 0);
                     httpExchange.close();
                 } catch (IOException e) {
+                    e.printStackTrace();
                     httpExchange.sendResponseHeaders(HttpHelpers.STATUS_INTERNAL_ERROR, 0);
                     httpExchange.getResponseBody().close();
                     httpExchange.close();
@@ -100,23 +124,9 @@ public class MyService implements KVService {
         }
     }
 
-    private byte[] getId(String query) throws IllegalIdException {
-        if (query == null) {
-            throw new IllegalIdException();
-        }
-
-        String[] queryParams = query.split("&");
-        for (String queryParam : queryParams) {
-            String[] parts = queryParam.split("=", 2);
-            if (parts[0].equals("id") && parts.length == 2 && parts[1].length() > 0) {
-                return parts[1].getBytes();
-            }
-        }
-        throw new IllegalIdException();
-    }
-
     @Override
     public void start() {
+        threadPool.start();
         try {
             httpServer = HttpServer.create(new InetSocketAddress(port), 0);
             httpServer.setExecutor(Executors.newFixedThreadPool(8));
@@ -125,6 +135,7 @@ public class MyService implements KVService {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        httpQueryCreator.start();
     }
 
     @Override
@@ -137,5 +148,7 @@ public class MyService implements KVService {
         if (httpServer != null) {
             httpServer.stop(0);
         }
+        httpQueryCreator.stop();
+        threadPool.stop();
     }
 }

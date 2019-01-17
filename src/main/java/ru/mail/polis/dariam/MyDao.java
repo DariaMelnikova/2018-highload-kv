@@ -16,10 +16,12 @@ import ru.mail.polis.KVDao;
 public class MyDao implements KVDao {
     private final String absolutePath;
     private final Base64.Encoder encoder;
+    private final UpdatesStorage updatesStorage;
 
     public MyDao(File path) {
         this.absolutePath = path.getAbsolutePath();
         this.encoder = Base64.getUrlEncoder();
+        this.updatesStorage = new UpdatesStorage();
     }
 
     @NotNull
@@ -35,6 +37,7 @@ public class MyDao implements KVDao {
     @Override
     public void upsert(@NotNull byte[] key, @NotNull byte[] value) throws IOException {
         Files.write(getPathByKey(key), value);
+        updatesStorage.updateTime(key);
     }
 
     @Override
@@ -44,6 +47,12 @@ public class MyDao implements KVDao {
         } catch (NoSuchFileException e) {
 
         }
+        updatesStorage.updateTime(key);
+    }
+
+    @Override
+    public long getUpdateTime(@NotNull byte[] key) throws IOException {
+        return updatesStorage.getUpdateTime(key);
     }
 
     private Path getPathByKey(byte[] key) {

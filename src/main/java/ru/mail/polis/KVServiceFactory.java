@@ -56,6 +56,6 @@ final class KVServiceFactory {
             throw new IllegalArgumentException("Port out of range");
         }
 
-        return new MyService(port, dao);
+        return new MyService(port, dao, topology);
     }
 }

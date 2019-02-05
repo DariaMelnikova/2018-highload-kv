@@ -29,8 +29,6 @@ public class PutController extends BaseController implements QueryProcessor {
 
     @Override
     public ActionResponse processQueryFromClient(QueryContext queryContext) throws IOException {
-        final long timestamp = System.currentTimeMillis();
-
         byte[] value = queryContext.getRequestBody();
         String myReplicaHost = storageContext.getMyReplicaHost();
 
@@ -54,7 +52,6 @@ public class PutController extends BaseController implements QueryProcessor {
                         HttpQueryResult httpQueryResult = storageContext.getHttpQueryCreator()
                                 .put(sameQueryOnReplica(queryContext, replicaHost))
                                 .withReplicas(new ReplicasCollection(Collections.singleton(myReplicaHost)))
-                                .withTimestamp(timestamp)
                                 .withBody(value)
                                 .execute();
 

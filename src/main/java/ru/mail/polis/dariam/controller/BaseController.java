@@ -58,7 +58,7 @@ abstract public class BaseController {
         allReplicas.add(storageContext.getMyReplicaHost());
         List<String> listOfAllReplicas = Arrays.asList(allReplicas.toArray());
 
-        int hash = new String(key).hashCode();
+        int hash = Arrays.hashCode(key);
         listOfAllReplicas.sort(Comparator.comparingInt(string -> string.hashCode() ^ hash));
 
         return listOfAllReplicas;

@@ -34,7 +34,6 @@ public class DeleteController extends BaseController implements QueryProcessor {
 
     @Override
     public ActionResponse processQueryFromClient(QueryContext queryContext) throws IOException {
-        final long timestamp = System.currentTimeMillis();
         String myReplicaHost = storageContext.getMyReplicaHost();
         ThreadPoolReplicasQuerys threadPool = storageContext.getThreadPool();
         KVDao dao = storageContext.getDao();
@@ -56,7 +55,6 @@ public class DeleteController extends BaseController implements QueryProcessor {
                         HttpQueryResult httpQueryResult = storageContext.getHttpQueryCreator()
                                 .delete(sameQueryOnReplica(queryContext, replicaHost))
                                 .withReplicas(new ReplicasCollection(Collections.singleton(myReplicaHost)))
-                                .withTimestamp(timestamp)
                                 .execute();
 
                         result.workingReplica();

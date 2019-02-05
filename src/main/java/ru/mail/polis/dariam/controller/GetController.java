@@ -6,6 +6,8 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.http.conn.HttpHostConnectException;
@@ -52,6 +54,7 @@ public class GetController extends BaseController implements QueryProcessor {
         ThreadPoolReplicasQuerys threadPool = storageContext.getThreadPool();
         KVDao dao = storageContext.getDao();
 
+        ConcurrentMap<String, byte[]> replicasValue = new ConcurrentHashMap<>();
         ReplicaAnswerResults results = forEachReplica(queryContext, replicaHost -> {
 
             if (replicaHost.equals(myReplicaHost)) {
@@ -60,7 +63,7 @@ public class GetController extends BaseController implements QueryProcessor {
                     ReplicaAnswerResult result = new ReplicaAnswerResult(myReplicaHost);
 
                     try {
-                        dao.get(id);
+                        replicasValue.put(replicaHost, dao.get(id));
                         result.setValueTimestamp(dao.getUpdateTime(id));
                         result.workingReplica();
                     } catch (IllegalArgumentException e) {
@@ -101,6 +104,8 @@ public class GetController extends BaseController implements QueryProcessor {
                                 Long timestamp = getQueryResult.getTimestamp();
                                 if (getQueryResult.isDeleted()) {
                                     result.setDeleted(timestamp);
+                                } else {
+                                    replicasValue.put(replicaHost, getQueryResult.getData());
                                 }
                                 result.setValueTimestamp(timestamp);
                                 break;
@@ -142,36 +147,12 @@ public class GetController extends BaseController implements QueryProcessor {
                     return new ActionResponse(HttpHelpers.STATUS_NOT_FOUND);
                 }
             } else {
-                return sendValueFromReplica(queryContext, replicasWithNeedingValue.toArray(), 0);
+                return new ActionResponse(HttpHelpers.STATUS_SUCCESS_GET, replicasValue.get(replicasWithNeedingValue.toArray()[0]));
             }
         } else if (results.getNotFound() >= queryContext.topologyParameters.getAck()) {
             return new ActionResponse(HttpHelpers.STATUS_NOT_FOUND);
         } else {
             return new ActionResponse(HttpHelpers.STATUS_NOT_ENOUGH_REPLICAS);
-        }
-    }
-
-    private ActionResponse sendValueFromReplica(QueryContext queryContext, String[] replicas, int numberOfReplica) throws IOException {
-        try {
-            HttpQueryResult getValueResult = storageContext.getHttpQueryCreator()
-                    .get(sameQueryOnReplica(queryContext, replicas[numberOfReplica]))
-                    .withReplicas(new ReplicasCollection(Collections.singleton(storageContext.getMyReplicaHost())))
-                    .execute();
-
-            int statusCode = getValueResult.getStatus();
-            byte[] data = getValueResult.getData();
-            switch (statusCode){
-                case HttpHelpers.STATUS_NOT_FOUND:
-                    return new ActionResponse(HttpHelpers.STATUS_NOT_FOUND);
-                case HttpHelpers.STATUS_SUCCESS_GET:
-                    return new ActionResponse(HttpHelpers.STATUS_SUCCESS_GET, data);
-                default:
-                    throw new IOException();
-            }
-        } catch (URISyntaxException e) {
-            throw new IOException();
-        } catch (HttpHostConnectException | ConnectTimeoutException e){
-            return sendValueFromReplica(queryContext, replicas, numberOfReplica + 1);
         }
     }
 
